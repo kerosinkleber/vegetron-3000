@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vegetron 3000</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&family=Silkscreen:wght@400;700&display=swap">
+<style>
+/* Layout: one beige 1986 workstation, CRT screen on top, chunky keypad below. Single deliberate look. */
+:root{
+  --case:#d9cfb8; --case-shade:#b8ad93; --ink:#3a3428;
+  --screen:#0f2a3a; --phosphor:#9ff0e0; --hot:#ff7ab8; --warn:#ffd166;
+  --display:"Silkscreen","Courier New",monospace; --mono:"VT323","Courier New",monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{min-height:100%;margin:0}
+body{background:#7a8a99;background:radial-gradient(circle at 50% 30%,#93a3b2,#5b6a78);color:var(--ink);font-family:var(--mono);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px;
+  display:flex;justify-content:center;align-items:flex-start}
+.machine{width:100%;max-width:760px;background:var(--case);border-radius:14px 14px 22px 22px;padding:18px;
+  box-shadow:inset 0 -6px 0 var(--case-shade),0 18px 40px rgba(0,0,0,.35);display:grid;gap:14px}
+.badge{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--display);font-size:12px;letter-spacing:.08em;flex-wrap:wrap;gap:6px}
+.badge b{font-size:16px}
+.bezel{background:#2b2a26;border-radius:10px;padding:14px}
+.screen{position:relative;background:var(--screen);border-radius:18px/14px;overflow:hidden;aspect-ratio:4/3;max-width:100%;
+  box-shadow:inset 0 0 60px rgba(0,0,0,.7)}
+.screen::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 2px,transparent 2px 4px);mix-blend-mode:multiply}
+canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
+.hud{position:absolute;left:0;right:0;top:0;padding:10px 14px;display:flex;justify-content:space-between;color:var(--phosphor);
+  font-size:18px;text-shadow:0 0 6px var(--phosphor);z-index:2;gap:8px}
+.log{position:absolute;left:0;right:0;bottom:0;padding:10px 14px;color:var(--phosphor);font-size:20px;line-height:1.15;
+  text-shadow:0 0 6px var(--phosphor);z-index:2;min-height:3.6em}
+.log .q{color:var(--warn);text-shadow:0 0 6px var(--warn)}
+.cursor{display:inline-block;width:.55em;height:1em;background:var(--phosphor);vertical-align:-2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.key{font-family:var(--mono);font-size:20px;text-align:left;color:var(--ink);background:#efe7d3;border:0;border-radius:6px;padding:10px 12px;
+  box-shadow:0 4px 0 var(--case-shade);cursor:pointer;line-height:1.05}
+.key small{display:block;font-family:var(--display);font-size:9px;letter-spacing:.1em;opacity:.6;margin-bottom:3px}
+.key:active,.key.on{transform:translateY(3px);box-shadow:0 1px 0 var(--case-shade)}
+.key.on{background:#fff6dc}
+.key:focus-visible,.yes:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}
+.yes{flex:1 1 220px;font-family:var(--display);font-weight:700;font-size:28px;letter-spacing:.1em;color:#fff;background:var(--hot);border:0;border-radius:8px;
+  padding:14px;box-shadow:0 5px 0 #b84a80;cursor:pointer}
+.yes:active{transform:translateY(4px);box-shadow:0 1px 0 #b84a80}
+.yes[disabled]{opacity:.45;cursor:default}
+.reset{flex:0 1 auto;font-family:var(--display);font-size:11px;background:transparent;border:2px solid var(--case-shade);border-radius:8px;padding:0 14px;color:var(--ink);cursor:pointer}
+.foot{font-family:var(--display);font-size:9px;letter-spacing:.1em;opacity:.55;text-align:center}
+@media (prefers-reduced-motion:reduce){.cursor{animation:none}}
+</style>
+</head>
+<body>
+
+<div class="machine">
+  <div class="badge"><b>VEGETRON 3000</b><span>PRODUCE ANIMATION SYSTEM · 640K</span></div>
+  <div class="bezel"><div class="screen">
+    <canvas id="cv" width="320" height="240"></canvas>
+    <div class="hud"><span id="mode">MODE: IDLE</span><span id="stalks">STALKS: 1</span></div>
+    <div class="log" id="log"></div>
+  </div></div>
+  <div class="keys" id="keys"></div>
+  <div class="row">
+    <button class="yes" id="yes" disabled>YES</button>
+    <button class="reset" id="reset">POWER CYCLE</button>
+  </div>
+  <div class="foot">ALL PROGRAMS CERTIFIED 100% CRUNCHY</div>
+</div>
+
+<script>
+const PROGRAMS=[
+  {id:"dance",tag:"PRG 01",label:"Load Stalk Dance",ask:"LOAD STALK DANCE?",ok:"STALK IS DANCING. VIBES NOMINAL."},
+  {id:"spin",tag:"PRG 02",label:"Add a spin",ask:"ROTATE THE STALK?",ok:"SPINNING. HE LOVES IT."},
+  {id:"hat",tag:"PRG 03",label:"Give him a hat",ask:"ISSUE ONE (1) TOP HAT?",ok:"HAT EQUIPPED. VERY FORMAL."},
+  {id:"multi",tag:"PRG 04",label:"Clone the stalk",ask:"DUPLICATE STALK? CANNOT BE UNDONE.",ok:"THERE ARE MORE OF HIM NOW."},
+  {id:"disco",tag:"PRG 05",label:"Turn on the floor",ask:"ENABLE DISCO FLOOR?",ok:"FLOOR IS LIT. FLOOR IS ALWAYS LIT."},
+  {id:"turbo",tag:"PRG 06",label:"Overclock to 4D",ask:"PUSH PAST THREE DIMENSIONS?",ok:"4D ACHIEVED. PLEASE DO NOT LOOK DIRECTLY."},
+  {id:"soup",tag:"PRG 07",label:"Make it soup",ask:"ARE YOU SURE? HE HAS A FAMILY.",ok:"SOUP MODE ACTIVE. IT IS A NICE SOUP."},
+];
+const state={dance:false,spin:false,hat:false,clones:1,disco:false,turbo:false,soup:false,pending:null};
+const $=id=>document.getElementById(id);
+const keys=$("keys"),yes=$("yes"),log=$("log");
+
+PROGRAMS.forEach(p=>{
+  const b=document.createElement("button");
+  b.className="key";b.id="k-"+p.id;
+  b.innerHTML=`<small>${p.tag}</small>${p.label}`;
+  b.onclick=()=>request(p);
+  keys.appendChild(b);
+});
+
+let typing=0;
+function say(lines){
+  const my=++typing;log.innerHTML="";
+  const full=lines.map(l=>({t:l.t,c:l.c||""}));let li=0,ci=0;
+  (function step(){
+    if(my!==typing)return;
+    log.innerHTML=full.slice(0,li).map(l=>`<div class="${l.c}">&gt; ${l.t}</div>`).join("")+
+      (li<full.length?`<div class="${full[li].c}">&gt; ${full[li].t.slice(0,ci)}<span class="cursor"></span></div>`:`<div>&gt; <span class="cursor"></span></div>`);
+    if(li>=full.length)return;
+    if(ci<full[li].t.length){ci++;setTimeout(step,22)}else{li++;ci=0;setTimeout(step,180)}
+  })();
+}
+
+function request(p){
+  state.pending=p;
+  document.querySelectorAll(".key").forEach(k=>k.classList.toggle("on",k.id==="k-"+p.id));
+  yes.disabled=false;
+  say([{t:p.ask,c:"q"}]);
+  yes.focus({preventScroll:true});
+}
+yes.onclick=()=>{
+  const p=state.pending;if(!p)return;
+  if(p.id==="multi")state.clones=Math.min(state.clones*2,16);
+  else{state[p.id]=true;if(p.id!=="dance")state.dance=true;}
+  state.pending=null;yes.disabled=true;
+  document.querySelectorAll(".key").forEach(k=>k.classList.remove("on"));
+  $("mode").textContent="MODE: "+(state.soup?"SOUP":state.turbo?"4D":state.disco?"DISCO":state.dance?"DANCE":"IDLE");
+  $("stalks").textContent="STALKS: "+state.clones;
+  say([{t:"OK."},{t:p.ok}]);
+};
+$("reset").onclick=()=>{
+  Object.assign(state,{dance:false,spin:false,hat:false,clones:1,disco:false,turbo:false,soup:false,pending:null});
+  yes.disabled=true;$("mode").textContent="MODE: IDLE";$("stalks").textContent="STALKS: 1";
+  document.querySelectorAll(".key").forEach(k=>k.classList.remove("on"));
+  boot();
+};
+function boot(){say([{t:"VEGETRON 3000 READY."},{t:"SELECT A PROGRAM, OPERATOR."}])}
+
+/* ---- canvas ---- */
+const cv=$("cv"),ctx=cv.getContext("2d");
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+function px(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),w,h)}
+function stalk(cx,base,t,i,scale){
+  const s=scale;
+  const bob=state.dance?Math.sin(t*6+i)*6*s:0;
+  const lean=state.dance?Math.sin(t*3+i)*0.25:0;
+  ctx.save();ctx.translate(cx,base+bob);
+  if(state.spin)ctx.scale(Math.cos(t*4+i),1);
+  ctx.rotate(lean);
+  // legs
+  const kick=state.dance?Math.sin(t*6+i)*5*s:0;
+  px(-6*s,-2*s+kick,3*s,10*s,"#3b6b2a");px(3*s,-2*s-kick,3*s,10*s,"#3b6b2a");
+  // stalk body with ribs
+  for(let k=0;k<5;k++){px((-8+k*3.5)*s,-56*s,3*s,54*s,k%2?"#7cc04a":"#9fdc63")}
+  // leaves
+  const flap=state.dance?Math.sin(t*8+i)*4:0;
+  [[-12,-70],[ -2,-78],[8,-72]].forEach(([lx,ly],j)=>{
+    px((lx)*s,(ly+flap*(j%2?1:-1))*s,8*s,16*s,"#5fae3a");
+    px((lx+2)*s,(ly-4+flap*(j%2?1:-1))*s,4*s,6*s,"#9fdc63");
+  });
+  // face
+  px(-5*s,-40*s,3*s,4*s,"#102018");px(3*s,-40*s,3*s,4*s,"#102018");
+  px(-3*s,-32*s,7*s,2*s,"#102018");
+  // arms
+  const wave=state.dance?Math.sin(t*6+i+1)*8*s:0;
+  px(-16*s,(-34)*s-wave,8*s,3*s,"#5fae3a");px(9*s,(-34)*s+wave,8*s,3*s,"#5fae3a");
+  if(state.hat){px(-10*s,-92*s,21*s,3*s,"#111");px(-6*s,-108*s,13*s,16*s,"#111");px(-6*s,-96*s,13*s,2*s,"#ff7ab8")}
+  ctx.restore();
+}
+function frame(ms){
+  const t=reduce?0:ms/1000;
+  // background
+  if(state.turbo){
+    for(let y=0;y<240;y+=8){const h=(y*2+t*200)%360;ctx.fillStyle=`hsl(${h} 70% ${18+8*Math.sin(y/20+t*3)}%)`;ctx.fillRect(0,y,320,8)}
+  }else{ctx.fillStyle="#0f2a3a";ctx.fillRect(0,0,320,240)}
+  // floor
+  const floorY=196;
+  for(let x=0;x<320;x+=20)for(let y=floorY;y<240;y+=11){
+    const on=state.disco&&((Math.floor(x/20)+Math.floor((y-floorY)/11)+Math.floor(t*4))%3===0);
+    px(x,y,19,10,on?["#ff7ab8","#ffd166","#9ff0e0"][Math.floor(x/20+t*2)%3]:"#173d52");
+  }
+  // soup bowl
+  const n=state.clones,scale=n>8?0.5:n>4?0.65:n>1?0.8:1;
+  if(state.soup){
+    ctx.fillStyle="#e9d9b0";ctx.beginPath();ctx.ellipse(160,182,120,22,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle="#c9a24a";ctx.beginPath();ctx.ellipse(160,178,108,15,0,0,Math.PI*2);ctx.fill();
+  }
+  const cols=Math.min(n,8),rows=Math.ceil(n/8);
+  for(let i=0;i<n;i++){
+    const r=Math.floor(i/8),c=i%8,perRow=Math.min(8,n-r*8);
+    const x=160+(c-(perRow-1)/2)*(300/Math.max(perRow,1))*(perRow>1?1:0);
+    const base=(state.soup?184:floorY+2)-r*44*scale+(rows>1?(rows-1)*20*scale:0);
+    stalk(x,base,t,i,scale);
+  }
+  if(state.soup){ctx.fillStyle="rgba(201,162,74,.85)";ctx.fillRect(40,176,240,8);
+    for(let k=0;k<6;k++){const sx=60+k*40,sy=150-((t*20+k*13)%40);px(sx,sy,3,6,"rgba(255,255,255,.35)")}}
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+boot();
+</script>
+</body>
+</html>
